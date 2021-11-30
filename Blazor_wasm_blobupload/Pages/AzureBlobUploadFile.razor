@@ -1,0 +1,82 @@
+﻿@page "/uploadblob"
+
+@using System.ComponentModel.DataAnnotations
+@using System.IO
+@using System.Linq
+@using System.Threading
+@using Azure
+@using Azure.Storage
+@using Azure.Storage.Blobs
+@using Azure.Storage.Blobs.Models
+
+<h3>Azure Blob Upload File</h3>
+
+<div class="container">
+    <label>Select the File to be uploaded:</label>
+    <InputFile id="browseFile" OnChange="@OnFileSelectionChange"></InputFile>
+    <hr/>
+     
+    <div class="progress">
+    <div class="progress-bar bg-info" role="progressbar" aria-valuenow="@progressBar"
+                     aria-valuemin="0" aria-valuemax="100" style="@($"width: { progressBar }%")">
+    <span class="sr-only">@progressBar</span>
+  </div>
+</div>
+    <hr />
+    <div class="container">
+        <strong>
+            @statusMessage
+        </strong>
+    </div>
+
+</div>
+@code {
+    private int maxFileSize = 1024 * 1024 * 20;
+    private string statusMessage = String.Empty;
+    private bool showProgressBar = false;
+    private string progressBar = String.Empty;
+
+    private async Task OnFileSelectionChange(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            statusMessage = String.Empty;
+            // 1. Select the file
+            var selectedFile = e.File;
+            // 2. The URL for the BLOB, the file that will  be created into the container
+            var azureBlobUri = new Uri($"https://[STORAGE-ACCOUNT-NAME].blob.core.windows.net/[CONTAINR-NAME]/{selectedFile.Name}");
+            // 3. Authenticate to the Azure Service using teh SAS
+            AzureSasCredential sasCredentials = new AzureSasCredential
+            ("[SAS-TOKEN]");
+            // 4. The BLOB Client to access the BLOB to upload the file
+            BlobClient blobClient = new BlobClient(azureBlobUri, sasCredentials, new BlobClientOptions());
+
+            // 5. Upoload the file
+            var res = await blobClient.UploadAsync(selectedFile.OpenReadStream(maxFileSize),
+            new BlobUploadOptions
+                {
+                    // 5.1. define HTTP Header Content Type 
+                    HttpHeaders = new BlobHttpHeaders { ContentType = selectedFile.ContentType },
+                    // 5.2. THe Transfer behavior with the transfer size
+                    TransferOptions = new StorageTransferOptions
+                    {
+                        InitialTransferSize = 1024 * 1024
+                    },
+                    // 5.3. The File Progress
+                    ProgressHandler = new Progress<long>((progress) =>
+                    {
+                        progressBar = (100.0 * progress / selectedFile.Size).ToString("0");
+
+                    })
+                    
+                });
+            statusMessage = "File Uploaded Successfully......";
+        }
+        catch (Exception ex)
+        {
+            statusMessage = ex.Message;
+        }
+
+
+    }
+}
